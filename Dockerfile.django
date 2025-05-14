@@ -1,0 +1,36 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir whitenoise
+
+# Copy the project files
+COPY . .
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Create media and static directories
+RUN mkdir -p /app/media /app/staticfiles /app/static
+
+# Create a script to handle Manim script communication
+RUN echo '#!/bin/bash\n\
+if [ -n "$MANIM_SERVICE" ]; then\n\
+  curl -X POST -H "Content-Type: application/json" \\\n\
+       -d "{\"script_path\": \"/manim/omega/$1\", \"scene_class\": \"$2\"}" \\\n\
+       http://${MANIM_SERVICE}:5001/execute-manim\n\
+else\n\
+  echo "MANIM_SERVICE environment variable not set"\n\
+  exit 1\n\
+fi' > /usr/local/bin/run-manim && \
+    chmod +x /usr/local/bin/run-manim
+
+# Expose the Django port
+EXPOSE 8000
+
+# Run the Django server
+CMD ["gunicorn", "core.wsgi:application", "--bind", "0.0.0.0:8000"] 

@@ -1,0 +1,24 @@
+{% extends "auth/emails/base_email.html" %}
+
+{% block title %}Thank You for Joining Our Waiting List{% endblock %}
+
+{% block header %}Thank You for Joining Our Waiting List{% endblock %}
+
+{% block content %}
+<p>Hello {{ name }},</p>
+
+<p>Thank you for your interest in <strong>Codercops Omega</strong>! We've added you to our waiting list.</p>
+
+<p>We're working hard to create an amazing platform for generating mathematical animations with AI. We'll notify you as soon as we're ready to invite you to join us.</p>
+
+<div style="background-color: #f5f5f5; padding: 15px; border-left: 4px solid #4285F4; margin: 20px 0;">
+    <p style="margin: 0;"><strong>What's next?</strong> We'll review your request and send you an invitation as soon as a spot becomes available.</p>
+</div>
+
+<p>In the meantime, if you have any questions, feel free to reach out to us at <a href="mailto:support@codercops.com">support@codercops.com</a>.</p>
+
+<p>Thank you for your patience!</p>
+
+<p>Best regards,<br>
+The Codercops Team</p>
+{% endblock %} 

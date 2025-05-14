@@ -1,0 +1,33 @@
+{% extends "auth/emails/base_email.html" %}
+
+{% block title %}Your Account Has Been Approved{% endblock %}
+
+{% block header %}Account Approved!{% endblock %}
+
+{% block content %}
+<p>Hello {{ name }},</p>
+
+<p>Great news! Your <strong>Codercops Omega</strong> account has been approved, and you now have full access to all platform features.</p>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ login_url }}" class="btn">Log In Now</a>
+</div>
+
+<p style="text-align: center; margin-top: -10px; font-size: 12px; color: #777;">Button not working? Copy and paste this link into your browser:<br>
+<a href="{{ login_url }}">{{ login_url }}</a></p>
+
+<p>With your approved account, you can now:</p>
+<ul>
+    <li>Generate Manim animation scripts using Google Gemini or Azure OpenAI</li>
+    <li>Render mathematical animations with the Manim engine</li>
+    <li>Download and share your animations</li>
+    <li>Access your script history and results</li>
+</ul>
+
+<p>If you have any questions or need assistance, please contact us at <a href="mailto:support@codercops.com">support@codercops.com</a>.</p>
+
+<p>We're excited to see what you create!</p>
+
+<p>Best regards,<br>
+The Codercops Team</p>
+{% endblock %} 

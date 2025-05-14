@@ -1,0 +1,29 @@
+{% extends "auth/emails/base_email.html" %}
+
+{% block title %}Verify Your Email Address{% endblock %}
+
+{% block header %}Verify Your Email Address{% endblock %}
+
+{% block content %}
+<p>Hello {{ name }},</p>
+
+<p>Thank you for registering with <strong>Codercops Omega</strong>! To complete your registration and access all features, please verify your email address by clicking the button below:</p>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ verification_url }}" class="btn">Verify Email Address</a>
+</div>
+
+<p style="text-align: center; margin-top: -10px; font-size: 12px; color: #777;">Button not working? Copy and paste this link into your browser:<br>
+<a href="{{ verification_url }}">{{ verification_url }}</a></p>
+
+<div style="background-color: #f5f5f5; padding: 15px; border-left: 4px solid #4285F4; margin: 20px 0;">
+    <p style="margin: 0;"><strong>Important:</strong> For security reasons, this verification link will expire in 24 hours.</p>
+</div>
+
+<p>After verifying your email, your account will need to be approved by an administrator before you can access all features. We'll notify you once your account has been approved.</p>
+
+<p>If you didn't create an account on Codercops Omega, please ignore this email or contact us at <a href="mailto:support@codercops.com">support@codercops.com</a> if you have concerns.</p>
+
+<p>Best regards,<br>
+The Codercops Team</p>
+{% endblock %} 

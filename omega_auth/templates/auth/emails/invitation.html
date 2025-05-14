@@ -1,0 +1,44 @@
+{% extends "auth/emails/base_email.html" %}
+
+{% block title %}You're Invited to Join Codercops Omega!{% endblock %}
+
+{% block header %}You're Invited!{% endblock %}
+
+{% block content %}
+<p>Hello {{ name }},</p>
+
+<p>Great news! You've been selected to join <strong>Codercops Omega</strong>, our platform for generating mathematical animations with AI.</p>
+
+<p>We're excited to have you as one of our early users. Your invitation is ready, and you can create your account by clicking the button below:</p>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ registration_url }}" class="btn">Create Your Account</a>
+</div>
+
+<p style="text-align: center; margin-top: -10px; font-size: 12px; color: #777;">Button not working? Copy and paste this link into your browser:<br>
+<a href="{{ registration_url }}">{{ registration_url }}</a></p>
+
+<div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <p style="margin: 0 0 10px 0;"><strong>Your Invitation Code:</strong></p>
+    <p style="margin: 0; font-family: monospace; font-size: 16px; background-color: #fff; padding: 10px; border: 1px solid #ddd; border-radius: 3px; word-break: break-all;">{{ invitation_token }}</p>
+    <p style="margin: 5px 0 0 0; font-size: 12px; color: #777;">You'll need this code during registration. Please keep it secure.</p>
+</div>
+
+<div style="background-color: #f5f5f5; padding: 15px; border-left: 4px solid #4285F4; margin: 20px 0;">
+    <p style="margin: 0;"><strong>Important:</strong> This invitation is valid for 7 days. After that, you'll need to request a new invitation.</p>
+</div>
+
+<p>Once you've created your account, you'll be able to:</p>
+<ul>
+    <li>Generate Manim animation scripts using AI</li>
+    <li>Render mathematical animations</li>
+    <li>Download and share your animations</li>
+</ul>
+
+<p>If you have any questions, please don't hesitate to contact us at <a href="mailto:support@codercops.com">support@codercops.com</a>.</p>
+
+<p>We look forward to seeing what you create!</p>
+
+<p>Best regards,<br>
+The Codercops Team</p>
+{% endblock %} 
