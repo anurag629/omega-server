@@ -1,223 +1,82 @@
-# Omega Django Project
+# Omega Server
 
-## About
-This Django application provides an API for generating mathematical animations using Manim, with AI-generated scripts from either Google Gemini or Azure OpenAI. It's a migration from a Flask-based application to Django with PostgreSQL.
+Omega Server is a Django-based backend for AI-powered Manim script generation and execution. It provides a secure, extensible API for generating, executing, and managing Manim animation scripts using advanced AI models (Google Gemini, Azure OpenAI) and Dockerized execution environments.
 
 ## Features
-- Generate Manim animation scripts with AI (Google Gemini or Azure OpenAI)
-- Execute Manim scripts and render animations
-- Store all generated scripts and animations in a database
-- Web UI for interacting with the system
-- RESTful API for programmatic access
-- Docker-based deployment for easy setup
 
-## Requirements
-- Python 3.10 or higher
-- PostgreSQL 12 or higher
-- Docker and Docker Compose (for containerized setup)
+- **AI-Powered Script Generation**: Generate Manim scripts from natural language prompts using Gemini or Azure OpenAI.
+- **Secure Script Execution**: Run scripts in isolated Docker containers, with automatic dependency management and AI-based debugging.
+- **User Authentication**: JWT-based authentication, email verification, and custom user management.
+- **RESTful API**: Endpoints for scripts, executions, providers, containers, and user management.
+- **Media Management**: Stores and serves generated videos, images, and scripts.
+- **Extensible Agent System**: Modular agents for AI, execution, Docker, and dependency management.
 
-## Tech Stack
-- **Backend Framework**: Django + Django REST Framework
-- **Database**: PostgreSQL
-- **Animation Engine**: Manim (Mathematical Animation)
-- **AI Services**: Google Gemini API, Azure OpenAI
-- **Containerization**: Docker, Docker Compose
+## Project Structure
 
-## Setup with Docker
+- `core/` - Django project settings and root URLs
+- `omega/` - Main app for Manim script management
+- `omega_auth/` - Custom authentication and user management
+- `agents/` - AI, execution, Docker, and dependency agents
+- `media/` - Stores generated videos, images, and scripts
+- `requirements.txt` - Python dependencies
+- `Dockerfile`, `docker-compose.yml` - Containerization support
 
-1. Clone the repository:
+## Quick Start
+
+### Prerequisites
+- Python 3.10+
+- Docker (for script execution)
+- PostgreSQL database
+
+### Setup
+1. **Clone the repository**
+2. **Install dependencies**:
    ```bash
-   git clone <repository-url>
-   cd codercops-omega
+   pip install -r requirements.txt
    ```
-
-2. Setup environment variables:
+3. **Configure environment variables**:
+   - Copy `env.example` to `.env` and fill in required values (DB, AI keys, etc.)
+4. **Apply migrations**:
    ```bash
-   # Copy the example env file
-   cp env.example .env
-   # Edit .env with your API keys and Django settings
+   python manage.py migrate
    ```
-
-3. Build and start the containers:
+5. **Create a superuser**:
+   ```bash
+   python manage.py createsuperuser
+   ```
+6. **Run the server**:
+   ```bash
+   python manage.py runserver
+   ```
+7. **(Optional) Start Docker Manim container**:
    ```bash
    docker-compose up -d
    ```
 
-4. Create a superuser (optional):
-   ```bash
-   docker-compose exec web python manage.py createsuperuser
-   ```
+## API Overview
 
-The application will be available at http://localhost:8000/
-The Django admin interface is available at http://localhost:8000/admin/
+- **Authentication**: `/api/auth/`
+- **Manim Scripts**: `/api/agents/scripts/` and `/api/generate-manim/`
+- **Executions**: `/api/agents/executions/`
+- **Providers**: `/api/agents/providers/`
+- **Containers**: `/api/agents/containers/`
 
-## Manual Setup (Without Docker)
+See [docs/API.md](docs/API.md) for detailed endpoint documentation.
 
-1. Ensure you have Python 3.10+ installed:
-   ```bash
-   python --version
-   ```
+## Architecture
 
-2. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd codercops-omega
-   ```
+- **Agents**: Modular classes for AI, execution, Docker, and dependency management.
+- **Models**: Track scripts, executions, providers, containers, and users.
+- **Security**: JWT authentication, CORS, Docker isolation, and environment-based secrets.
+- **Media**: All outputs are stored in `/media` and served via API.
 
-3. Setup environment variables:
-   ```bash
-   # Copy the example env file
-   cp env.example .env
-   # Edit .env with your API keys
-   ```
-
-4. Create a virtual environment and install dependencies:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-5. Setup PostgreSQL database and update .env with your database credentials
-
-6. Run migrations:
-   ```bash
-   python manage.py migrate
-   ```
-
-7. Create superuser (optional):
-   ```bash
-   python manage.py createsuperuser
-   ```
-
-8. Run the Django development server:
-   ```bash
-   python manage.py runserver
-   ```
-
-The app will be available at http://localhost:8000/
-
-## API Usage
-
-### Generate Manim Script
-
-**Endpoint:** `/api/generate-manim/`  
-**Method:** POST  
-**Body:**
-```json
-{
-  "prompt": "Your description for the Manim animation",
-  "provider": "gemini",
-  "execute": false
-}
-```
-
-**Parameters:**
-- `prompt` - Description of the animation to create
-- `provider` - Either `gemini` or `azure_openai`
-- `execute` - (Optional) Boolean flag to execute the script after generation
-
-**Provider options:**
-- `gemini` - Uses Google's Gemini model
-- `azure_openai` - Uses Azure OpenAI
-
-**Response:**
-```json
-{
-  "id": "uuid",
-  "script": "Generated Manim Python script",
-  "script_path": "path/to/generated/script.py",  // If execute=true
-  "output_path": "path/to/output/video.mp4",     // If execute=true
-  "output_url": "http://localhost:8000/media/..." // If execute=true
-}
-```
-
-### List Scripts
-
-**Endpoint:** `/api/scripts/`  
-**Method:** GET  
-Lists all generated scripts with their metadata.
-
-### Get Script Details
-
-**Endpoint:** `/api/scripts/{id}/`  
-**Method:** GET  
-Gets details of a specific script.
-
-## Example Usage
-
-### Using cURL
-```bash
-# Generate script only
-curl -X POST http://localhost:8000/api/generate-manim/ \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "A circle transforming into a square", "provider": "gemini"}'
-
-# Generate and execute script
-curl -X POST http://localhost:8000/api/generate-manim/ \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "A circle transforming into a square", "provider": "gemini", "execute": true}'
-```
-
-### Using Web UI
-1. Navigate to http://localhost:8000/
-2. Enter your animation description in the text area
-3. Select the AI provider (Gemini or Azure OpenAI)
-4. Toggle "Generate and execute" if you want a video rendered
-5. Click "Generate" and wait for the results
-
-## Docker Container Structure
-
-This project uses three Docker containers:
-
-1. **web (Django)**: Runs the Django application
-   - Uses Python 3.10 for Django 5.2 compatibility
-   - Listens on port 8000
-   - Communicates with the Manim container to execute scripts
-   - Stores data in PostgreSQL
-   - Serves the web UI and API
-
-2. **db (PostgreSQL)**: Database server
-   - Persistent storage for animation scripts and metadata
-   - Connected to Django with the Django ORM
-   - Stores user data, script information, and execution results
-
-3. **omega-manim**: Runs the Manim environment
-   - Based on the official Manim Community Docker image
-   - Has access to the scripts generated by the Django container
-   - Outputs rendered animations to the shared media directory
-   - Provides a REST API to execute Manim scripts
-
-## Development
-
-### Making Migrations
-If you modify the models, you'll need to create and apply migrations:
-
-```bash
-# Inside Docker
-docker-compose exec web python manage.py makemigrations
-docker-compose exec web python manage.py migrate
-
-# Without Docker
-python manage.py makemigrations
-python manage.py migrate
-```
-
-### Running Tests
-```bash
-# Inside Docker
-docker-compose exec web python manage.py test
-
-# Without Docker
-python manage.py test
-```
-
-## Troubleshooting
-
-- **Python Version**: Make sure you're using Python 3.10 or higher as Django 5.2 requires it.
-- **Database Connection Issues**: Ensure the database container is running and the credentials in .env match the Postgres settings.
-- **Manim Execution Errors**: Check the logs of the omega-manim container for detailed error messages.
-- **Missing Media Files**: The media directory must be writable by both the web and manim containers.
+## Extending
+- Add new AI providers by extending `AIScriptGenerationAgent`.
+- Add new endpoints or business logic via DRF viewsets and serializers.
 
 ## License
-[Specify your license here]
+MIT
+
+---
+
+For more details, see the `docs/` directory. 
