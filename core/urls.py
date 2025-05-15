@@ -11,6 +11,7 @@ os.makedirs(os.path.join(settings.MEDIA_ROOT), exist_ok=True)
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('omega_auth.urls')),  # Authentication endpoints
+    path('api/agents/', include('agents.urls')),  # Agents API endpoints
     path('', include('omega.urls')),  # Include our app's URLs
     
     # Always serve media files, regardless of DEBUG setting

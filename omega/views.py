@@ -12,7 +12,9 @@ import traceback
 from datetime import datetime
 from .models import ManimScript
 from .serializers import ManimScriptSerializer, ManimScriptGenerateSerializer
-from .services import generate_manim_script, execute_manim_script
+# Import agents instead of services
+from agents.agents.ai_agent import AIScriptGenerationAgent
+from agents.agents.execution_agent import ManimExecutionAgent
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +57,16 @@ class GenerateManimScriptAPIView(APIView):
         should_execute = serializer.validated_data.get('execute', False)
         
         try:
-            # Generate the script
-            script = generate_manim_script(prompt, provider)
+            # Generate the script using AIScriptGenerationAgent
+            generation_agent = AIScriptGenerationAgent()
+            result = generation_agent.generate(prompt, provider)
+            
+            if not result['success']:
+                return Response({
+                    'error': result.get('error', 'Failed to generate script')
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+            script = result['script']
             
             # Create ManimScript object
             manim_script = ManimScript.objects.create(
@@ -75,12 +85,17 @@ class GenerateManimScriptAPIView(APIView):
             # Execute the script if requested
             if should_execute:
                 try:
-                    result = execute_manim_script(script)
+                    # Execute using ManimExecutionAgent
+                    execution_agent = ManimExecutionAgent()
+                    exec_result = execution_agent.execute({
+                        'id': str(manim_script.id),
+                        'content': script
+                    })
                     
                     # Check if execution was successful
-                    if result.get('success', False):
+                    if exec_result.get('success', False):
                         # Update the model with execution results
-                        output_path = result['output_path']
+                        output_path = exec_result['output_path']
                         output_url = f"{settings.BASE_URL}/media/{output_path}"
                         
                         manim_script.output_path = output_path
@@ -88,7 +103,7 @@ class GenerateManimScriptAPIView(APIView):
                         manim_script.status = 'completed'
                     else:
                         # Execution failed but we still have the script
-                        error_msg = result.get('error', 'Unknown error during execution')
+                        error_msg = exec_result.get('error', 'Unknown error during execution')
                         manim_script.status = 'failed'
                         manim_script.error_message = error_msg
                         
@@ -99,9 +114,9 @@ class GenerateManimScriptAPIView(APIView):
                     manim_script.save()
 
                     # Add execution data to response if available
-                    if result.get('output_path'):
-                        response_data['output_path'] = result['output_path']
-                        output_url = f"{settings.BASE_URL}/media/{result['output_path']}"
+                    if exec_result.get('output_path'):
+                        response_data['output_path'] = exec_result['output_path']
+                        output_url = f"{settings.BASE_URL}/media/{exec_result['output_path']}"
                         response_data['output_url'] = output_url
                     
                 except Exception as e:

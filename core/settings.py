@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'corsheaders',  # Add CORS headers
     'omega',  # Our main application
     'omega_auth',  # Authentication app
+    'agents',  # Agents app for AI and execution services
 ]
 
 MIDDLEWARE = [
@@ -253,6 +254,11 @@ LOGGING = {
             'propagate': True,
         },
         'omega': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'agents': {
             'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': True,

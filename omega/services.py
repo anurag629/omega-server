@@ -41,7 +41,7 @@ def generate_manim_script(prompt, provider):
         genai.configure(api_key=settings.GEMINI_API_KEY)
             
         # Call Gemini API
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash-preview-04-17')
         response = model.generate_content(manim_prompt)
         
         # Extract the text from the response
@@ -135,7 +135,7 @@ def debug_manim_script(script, error_message):
         try:
             logger.info("Using Gemini to debug script")
             genai.configure(api_key=settings.GEMINI_API_KEY)
-            model = genai.GenerativeModel('gemini-2.0-flash')
+            model = genai.GenerativeModel('gemini-2.5-flash-preview-04-17')
             response = model.generate_content(debug_prompt)
             
             if hasattr(response, 'text'):
