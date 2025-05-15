@@ -224,7 +224,6 @@ BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 # Use 'localhost' for local development, 'omega-manim' for Docker
 MANIM_SERVICE = os.environ.get('MANIM_SERVICE', 'localhost')
-MANIM_SERVICE_PORT = os.environ.get('MANIM_SERVICE_PORT', '5001')
 
 # Logging configuration
 LOGGING = {

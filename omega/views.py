@@ -77,21 +77,32 @@ class GenerateManimScriptAPIView(APIView):
                 try:
                     result = execute_manim_script(script)
                     
-                    # Update the model with execution results
-                    script_path = result['script_path']
-                    output_path = result['output_path']
-                    output_url = f"{settings.BASE_URL}/media/{output_path}"
+                    # Check if execution was successful
+                    if result.get('success', False):
+                        # Update the model with execution results
+                        output_path = result['output_path']
+                        output_url = f"{settings.BASE_URL}/media/{output_path}"
+                        
+                        manim_script.output_path = output_path
+                        manim_script.output_url = output_url
+                        manim_script.status = 'completed'
+                    else:
+                        # Execution failed but we still have the script
+                        error_msg = result.get('error', 'Unknown error during execution')
+                        manim_script.status = 'failed'
+                        manim_script.error_message = error_msg
+                        
+                        # Add error to response
+                        response_data['error'] = error_msg
                     
-                    manim_script.script_path = script_path
-                    manim_script.output_path = output_path
-                    manim_script.output_url = output_url
-                    manim_script.status = 'completed'
+                    # Save the model in either case
                     manim_script.save()
-                    
-                    # Add execution data to response
-                    response_data['script_path'] = script_path
-                    response_data['output_path'] = output_path
-                    response_data['output_url'] = output_url
+
+                    # Add execution data to response if available
+                    if result.get('output_path'):
+                        response_data['output_path'] = result['output_path']
+                        output_url = f"{settings.BASE_URL}/media/{result['output_path']}"
+                        response_data['output_url'] = output_url
                     
                 except Exception as e:
                     error_msg = str(e)

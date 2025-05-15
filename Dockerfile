@@ -19,9 +19,7 @@ RUN pip3 install --no-cache-dir \
     jupyter \
     notebook \
     tqdm \
-    pydub \
-    flask \
-    requests
+    pydub
 
 # Create directories for mounting
 RUN mkdir -p /manim/omega /manim/media /manim/omega/scripts
@@ -30,9 +28,6 @@ WORKDIR /manim
 # Copy the installation script
 COPY install_in_container.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/install_in_container.sh
-
-# Copy the Flask executor app
-COPY executor.py /manim/executor.py
 
 # Add manim to PATH and ensure it's in the PATH when using docker exec
 ENV PATH="/opt/conda/bin:${PATH}"
@@ -48,5 +43,5 @@ manim "$@"' > /usr/local/bin/manim-wrapper && \
 # Make sure media directory is writable
 RUN chmod -R 777 /manim/media /manim/omega
 
-# Set the default command to run the Flask app
-CMD ["python", "/manim/executor.py"] 
+# Keep the container running
+CMD ["tail", "-f", "/dev/null"] 

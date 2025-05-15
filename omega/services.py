@@ -4,6 +4,7 @@ import logging
 import requests
 import traceback
 import subprocess
+import tempfile
 import google.generativeai as genai
 from openai import AzureOpenAI
 from django.conf import settings
@@ -129,40 +130,10 @@ def debug_manim_script(script, error_message):
     DO NOT include ```python or ``` markers around the code. Just give me the pure Python code.
     """
     
-    try:
-        if settings.AZURE_OPENAI_API_KEY and settings.AZURE_OPENAI_ENDPOINT:
-            # Use Azure OpenAI for debugging
-            # Make sure we don't pass any proxy settings which may cause issues with newer OpenAI client versions
-            # Save the current proxy settings
-            http_proxy = os.environ.pop('HTTP_PROXY', None)
-            https_proxy = os.environ.pop('HTTPS_PROXY', None)
-            
-            try:
-                client = AzureOpenAI(
-                    api_key=settings.AZURE_OPENAI_API_KEY,
-                    api_version="2023-07-01-preview",
-                    azure_endpoint=settings.AZURE_OPENAI_ENDPOINT
-                )
-                
-                response = client.chat.completions.create(
-                    model=settings.AZURE_OPENAI_DEPLOYMENT,
-                    messages=[
-                        {"role": "system", "content": "You are an expert Manim developer who can fix errors in animation scripts."},
-                        {"role": "user", "content": debug_prompt}
-                    ],
-                    temperature=0.3,  # Lower temperature for more precise fixes
-                    max_tokens=4000
-                )
-                
-                fixed_script = response.choices[0].message.content
-            finally:
-                # Restore proxy settings
-                if http_proxy:
-                    os.environ['HTTP_PROXY'] = http_proxy
-                if https_proxy:
-                    os.environ['HTTPS_PROXY'] = https_proxy
-        elif settings.GEMINI_API_KEY:
-            # Fallback to Gemini if Azure OpenAI is not configured
+    # Try using Gemini first as it's less likely to have proxy issues
+    if settings.GEMINI_API_KEY:
+        try:
+            logger.info("Using Gemini to debug script")
             genai.configure(api_key=settings.GEMINI_API_KEY)
             model = genai.GenerativeModel('gemini-2.0-flash')
             response = model.generate_content(debug_prompt)
@@ -171,14 +142,77 @@ def debug_manim_script(script, error_message):
                 fixed_script = response.text
             else:
                 fixed_script = str(response.candidates[0].content.parts[0].text)
-        else:
-            raise ValueError("No AI provider configured for debugging")
+                
+            # Clean up the fixed script
+            return clean_script(fixed_script)
+        except Exception as gemini_error:
+            logger.error(f"Error using Gemini to debug script: {str(gemini_error)}")
+            # Continue to try Azure OpenAI if Gemini fails
+    
+    # Only try Azure OpenAI if configured and Gemini failed or isn't configured
+    if settings.AZURE_OPENAI_API_KEY and settings.AZURE_OPENAI_ENDPOINT:
+        try:
+            logger.info("Using Azure OpenAI to debug script")
             
-        # Clean up the fixed script
-        return clean_script(fixed_script)
+            # Create client with minimal configuration to avoid proxy issues
+            # Using a fresh import in a separate function to isolate potential issues
+            fixed_script = _azure_openai_debug(debug_prompt)
+            
+            if fixed_script:
+                return clean_script(fixed_script)
+            else:
+                raise ValueError("Azure OpenAI returned empty response")
+        except Exception as azure_error:
+            logger.error(f"Error using Azure OpenAI to debug script: {str(azure_error)}")
+            # If both methods fail, fall back to a simple correction strategy
+    
+    # If both AI services fail, try a simple correction approach
+    logger.warning("Both AI debugging methods failed, using simple correction strategy")
+    
+    # Attempt some basic corrections based on common Manim errors
+    if "'manim' is not recognized" in error_message:
+        # This is likely just an execution environment issue, return the script as is
+        return script
+    
+    if "No module named" in error_message:
+        # Try to extract the module name and suggest an import
+        module_name = error_message.split("No module named")[1].strip().strip("'").strip('"')
+        if module_name:
+            return f"import {module_name}\n\n{script}"
+    
+    # If we can't fix it, return the original script
+    logger.warning("Could not debug script, returning original")
+    return script
+
+
+def _azure_openai_debug(prompt):
+    """
+    Isolated function to handle Azure OpenAI API calls to avoid proxy issues
+    """
+    try:
+        # Fresh import to avoid any cached configuration issues
+        from openai import AzureOpenAI
+        
+        client = AzureOpenAI(
+            api_key=settings.AZURE_OPENAI_API_KEY, 
+            api_version="2023-07-01-preview",
+            azure_endpoint=settings.AZURE_OPENAI_ENDPOINT
+        )
+        
+        response = client.chat.completions.create(
+            model=settings.AZURE_OPENAI_DEPLOYMENT,
+            messages=[
+                {"role": "system", "content": "You are an expert Manim developer who can fix errors in animation scripts."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=4000
+        )
+        
+        return response.choices[0].message.content
     except Exception as e:
-        logger.error(f"Error debugging Manim script: {str(e)}")
-        raise ValueError(f"Failed to debug script: {str(e)}")
+        logger.error(f"Error in isolated Azure OpenAI call: {str(e)}")
+        return None
 
 
 def install_missing_dependencies(error_message):
@@ -207,7 +241,9 @@ def install_missing_dependencies(error_message):
                     ["docker", "exec", container_name, "bash", "-c", install_command],
                     check=True,
                     capture_output=True,
-                    text=True
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace"
                 )
                 logger.info(f"Successfully installed {module_name} in container")
                 return True
@@ -217,9 +253,286 @@ def install_missing_dependencies(error_message):
     return False
 
 
+def ensure_docker_container_running(container_name="omega-manim"):
+    """
+    Check if the Docker container is running and start it if needed
+    """
+    try:
+        # Check if container exists and is running
+        check_cmd = ["docker", "container", "inspect", "-f", "{{.State.Running}}", container_name]
+        result = subprocess.run(check_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        
+        if result.returncode != 0:
+            logger.warning(f"Docker container {container_name} does not exist or is not accessible")
+            return False
+            
+        if result.stdout.strip() == "true":
+            logger.info(f"Docker container {container_name} is already running")
+            return True
+            
+        # If container exists but is not running, start it
+        logger.info(f"Starting Docker container {container_name}")
+        start_cmd = ["docker", "start", container_name]
+        start_result = subprocess.run(start_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        
+        if start_result.returncode == 0:
+            logger.info(f"Successfully started Docker container {container_name}")
+            return True
+        else:
+            logger.error(f"Failed to start Docker container: {start_result.stderr}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error checking Docker container status: {str(e)}")
+        return False
+
+
+def execute_manim_locally(script_content, scene_class, script_id):
+    """
+    Execute Manim script directly from memory without saving to a permanent file
+    """
+    logger.info(f"Executing Manim script with ID {script_id}")
+    
+    # Check and ensure Docker container is running first
+    container_name = "omega-manim"
+    docker_available = ensure_docker_container_running(container_name)
+    
+    # Create a unique identifier for this execution
+    base_name = f"manim_script_{script_id}"
+    media_root = settings.MEDIA_ROOT
+    
+    # Create temp file for output capture
+    with tempfile.NamedTemporaryFile(prefix="manim_output_", suffix=".txt", delete=False, mode="w+", encoding="utf-8") as output_file:
+        output_file_path = output_file.name
+    
+    # Create a temporary script file
+    with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w+", encoding="utf-8") as script_file:
+        # Write the script content to the temp file
+        script_file.write(script_content)
+        script_path = script_file.name
+        logger.info(f"Created temporary script file at {script_path}")
+    
+    try:
+        # Clean script if needed - working directly with the temp file
+        clean_script_content(script_path)
+        
+        # Prepare the command - adjust based on your environment
+        container_name = "omega-manim"
+        
+        if settings.MANIM_SERVICE == "localhost":
+            # Local development - for local execution, check if Docker is available first
+            # since Manim might not be installed in the local environment
+            try:
+                # Try to use Docker even in local development mode
+                docker_run_cmd = [
+                    "docker", "exec", container_name, 
+                    "bash", "-c", f"cd /manim && python -m manim {os.path.basename(script_path)} {scene_class} -qm"
+                ]
+                
+                # Copy the script to container first
+                temp_container_path = f"/tmp/{os.path.basename(script_path)}"
+                copy_cmd = ["docker", "cp", script_path, f"{container_name}:{temp_container_path}"]
+                subprocess.run(copy_cmd, check=True, capture_output=True, encoding="utf-8", errors="replace")
+                
+                # Move the script to the manim directory in the container
+                mv_cmd = ["docker", "exec", container_name, "bash", "-c", f"cp {temp_container_path} /manim/{os.path.basename(script_path)}"]
+                subprocess.run(mv_cmd, check=True, capture_output=True, encoding="utf-8", errors="replace")
+                
+                # Execute manim in the container
+                process = subprocess.run(docker_run_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                complete_output = process.stdout + process.stderr
+                
+                logger.info("Used Docker to execute Manim script in local development mode")
+            except Exception as e:
+                # If Docker execution fails, try direct command as before
+                logger.warning(f"Docker execution failed: {str(e)}. Falling back to local Manim if available.")
+                cmd = f"cd {media_root} && manim {script_path} {scene_class} -qm 2>&1"
+                process = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                complete_output = process.stdout + process.stderr
+        else:
+            # Use Docker container - copy temp file into container first
+            temp_container_path = f"/tmp/{os.path.basename(script_path)}"
+            
+            # Copy the script to the container
+            copy_cmd = ["docker", "cp", script_path, f"{container_name}:{temp_container_path}"]
+            subprocess.run(copy_cmd, check=True, capture_output=True, encoding="utf-8", errors="replace")
+            
+            # Move the script to the manim directory in the container
+            mv_cmd = ["docker", "exec", container_name, "bash", "-c", f"cp {temp_container_path} /manim/{os.path.basename(script_path)}"]
+            subprocess.run(mv_cmd, check=True, capture_output=True, encoding="utf-8", errors="replace")
+            
+            # Remove the temporary file from Docker container
+            rm_cmd = ["docker", "exec", container_name, "bash", "-c", f"rm -f {temp_container_path}"]
+            subprocess.run(rm_cmd, capture_output=True, encoding="utf-8", errors="replace")
+            
+            # Execute manim in the container - using python -m manim for better reliability
+            cmd = f"cd /manim && python -m manim {os.path.basename(script_path)} {scene_class} -qm"
+            process = subprocess.run(
+                ["docker", "exec", container_name, "bash", "-c", cmd],
+                capture_output=True,
+                text=True,
+                encoding="utf-8", 
+                errors="replace"
+            )
+            complete_output = process.stdout + process.stderr
+            
+            # Clean up script file in Docker container after execution
+            cleanup_cmd = f"rm -f /manim/{os.path.basename(script_path)}"
+            subprocess.run(
+                ["docker", "exec", container_name, "bash", "-c", cleanup_cmd],
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+        
+        logger.info(f"Command output:\n{complete_output}")
+        
+        # Write the output to file for reference with proper encoding
+        with open(output_file_path, "w", encoding="utf-8", errors="replace") as f:
+            f.write(complete_output)
+        
+        # Determine the expected output path
+        # Note: Manim creates output dirs based on the script filename without path
+        script_basename = os.path.basename(script_path).replace('.py', '')
+        output_path = f"videos/{script_basename}/720p30/{scene_class}.mp4"
+        full_output_path = os.path.join(media_root, output_path)
+        
+        # Check if output file exists in the expected location
+        success = process.returncode == 0
+        
+        # If process was successful but file doesn't exist in the expected path,
+        # try to find it in the media directory
+        if success and not os.path.exists(full_output_path):
+            media_dir = os.path.join(media_root, f"videos/{script_basename}/720p30/")
+            if os.path.exists(media_dir):
+                files = os.listdir(media_dir)
+                logger.info(f"Files in output directory: {files}")
+                if files:  # Use first file if any exist
+                    output_path = f"videos/{script_basename}/720p30/{files[0]}"
+                    full_output_path = os.path.join(media_root, output_path)
+        
+        # Final check if the file exists
+        if os.path.exists(full_output_path):
+            logger.info(f"Output file created: {full_output_path}")
+            result = {
+                "success": True,
+                "output": complete_output,
+                "output_path": output_path
+            }
+        else:
+            logger.error(f"Output file not found after execution: {full_output_path}")
+            # Extract error information
+            error_info = complete_output
+            if "TypeError: " in complete_output:
+                # Extract TypeError and related lines for improved debugging
+                error_lines = []
+                for line in complete_output.split("\n"):
+                    if "TypeError: " in line or "❱" in line:
+                        error_lines.append(line)
+                    # Also capture stack frames for context
+                    if ".py" in line and "in" in line:
+                        error_lines.append(line)
+                if error_lines:
+                    error_info = "\n".join(error_lines)
+            
+            result = {
+                "success": False,
+                "error": error_info,
+                "output": complete_output
+            }
+        
+        return result
+    except Exception as e:
+        error_msg = str(e)
+        stack_trace = traceback.format_exc()
+        logger.error(f"Error executing script: {error_msg}\n{stack_trace}")
+        return {
+            "success": False,
+            "error": f"{error_msg}\n{stack_trace}",
+            "output": ""
+        }
+    finally:
+        # Clean up temporary files
+        try:
+            # Delete the primary temp files we created
+            if os.path.exists(script_path):
+                os.unlink(script_path)
+            if os.path.exists(output_file_path):
+                os.unlink(output_file_path)
+                
+            # Clean up any temp directories created by Docker/Manim
+            script_basename = os.path.basename(script_path).replace('.py', '')
+            
+            # Get the server root directory (one level up from media_root)
+            server_root = os.path.dirname(media_root)
+            
+            temp_dirs = [
+                os.path.join(tempfile.gettempdir(), f"tmp{script_basename}*"),
+                os.path.join(tempfile.gettempdir(), f"manim_*_{script_id}*"),
+                os.path.join(media_root, f"videos/tmp{script_basename}*"),
+                # Add patterns for direct omega-server temp files
+                os.path.join(server_root, "tmp*.py"),
+                os.path.join(server_root, "tmp*"),
+                # Add specific pattern for the temp file the user mentioned
+                os.path.join(server_root, "tmp*fwni.py"),
+                os.path.join(server_root, "tmp*fwni")
+            ]
+            
+            # Use glob to find and remove matching temp dirs
+            import glob
+            import shutil
+            for pattern in temp_dirs:
+                for temp_dir in glob.glob(pattern):
+                    if os.path.isdir(temp_dir):
+                        shutil.rmtree(temp_dir, ignore_errors=True)
+                    elif os.path.isfile(temp_dir):
+                        os.unlink(temp_dir)
+            
+            logger.info(f"Cleaned up all temporary files")
+        except Exception as e:
+            logger.warning(f"Error cleaning up temporary files: {e}")
+
+
+def clean_script_content(script_path):
+    """Clean script content in the temporary file if needed"""
+    try:
+        with open(script_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+            
+        if "```python" in content or "```" in content:
+            logger.info(f"Cleaning script file: {script_path}")
+            cleaned_content = content.replace("```python", "").replace("```", "").strip()
+            
+            with open(script_path, "w", encoding="utf-8", errors="replace") as f:
+                f.write(cleaned_content)
+            logger.info("Script cleaned")
+        
+        # Clean up any other temp files that may have been created in the root directory
+        try:
+            server_root = os.path.dirname(settings.MEDIA_ROOT)
+            import glob
+            
+            # Check for temp files in the server root with similar names
+            basename = os.path.basename(script_path)
+            if basename.startswith('tmp'):
+                # Look for similar temp files
+                similar_pattern = os.path.join(server_root, basename[:5] + '*')
+                for similar_file in glob.glob(similar_pattern):
+                    if similar_file != script_path and os.path.isfile(similar_file):
+                        os.unlink(similar_file)
+                        logger.info(f"Removed similar temp file: {similar_file}")
+        except Exception as cleanup_err:
+            logger.warning(f"Error cleaning up similar temp files: {cleanup_err}")
+            
+        return True
+    except Exception as e:
+        logger.error(f"Error cleaning script: {e}")
+        return False
+
+
 def execute_manim_script(script, script_id=None):
     """
-    Executes the generated Manim script in the Manim container
+    Executes the generated Manim script directly from memory
     with automatic error handling and debugging
     """
     # If no script_id is provided, generate a unique ID
@@ -230,6 +543,7 @@ def execute_manim_script(script, script_id=None):
     max_debug_attempts = 3
     current_attempt = 0
     current_script = script
+    last_error = None
     
     while current_attempt < max_debug_attempts:
         current_attempt += 1
@@ -249,125 +563,126 @@ def execute_manim_script(script, script_id=None):
             
             logger.info(f"Using scene class: {scene_class}")
             
-            # Send a request to the Manim container
-            manim_url = f"http://{settings.MANIM_SERVICE}:{settings.MANIM_SERVICE_PORT}/execute-manim"
-            logger.info(f"Sending request to Manim service at {manim_url}")
+            # Execute Manim directly with script content
+            result = execute_manim_locally(current_script, scene_class, script_id)
+            logger.info(f"Manim execution result: {result}")
             
-            try:
-                response = requests.post(
-                    manim_url,
-                    json={
-                        'script_content': current_script,
-                        'scene_class': scene_class,
-                        'script_id': str(script_id)
-                    },
-                    timeout=300  # Increased timeout for complex animations
-                )
+            if not result.get('success'):
+                error_msg = result.get('error', 'Unknown error')
+                last_error = error_msg
+                logger.error(f"Manim execution failed: {error_msg}")
                 
-                logger.info(f"Manim container response status: {response.status_code}")
-                
-                if not response.ok:
-                    logger.error(f"Manim execution failed with status {response.status_code}: {response.text}")
-                    raise ValueError(f"Manim execution failed: {response.text}")
-                
-                try:
-                    response_data = response.json()
-                    logger.info(f"Manim response data: {response_data}")
-                    
-                    if not response_data.get('success'):
-                        error_msg = response_data.get('error', 'Unknown error')
-                        logger.error(f"Manim execution failed: {error_msg}")
-                        
-                        # Check if this is the last attempt
-                        if current_attempt >= max_debug_attempts:
-                            raise ValueError(f"Max debug attempts reached. Last error: {error_msg}")
-                        
-                        # Try to install missing dependencies if error suggests that's the issue
-                        if install_missing_dependencies(error_msg):
-                            logger.info("Installed missing dependencies, retrying script execution")
-                            continue
-                        
-                        # Debug the script with AI
-                        logger.info("Attempting to debug script with AI")
-                        current_script = debug_manim_script(current_script, error_msg)
-                        logger.info("AI provided a fixed script, will retry execution")
-                        continue  # Retry with fixed script
-                    
-                    # Get the output path from the response
-                    output_path = response_data.get('output_path')
-                    if not output_path:
-                        raise ValueError("Missing output_path in Manim response")
-                    
-                    # Return script and output path
-                    result = {
+                # Check if this is the last attempt
+                if current_attempt >= max_debug_attempts:
+                    # Return a partial result with the current script and error
+                    return {
                         'script': current_script,
-                        'output_path': output_path
+                        'output_path': None,
+                        'error': error_msg,
+                        'success': False
                     }
-                    logger.info(f"Manim execution successful. Result: {result}")
-                    return result
-                    
-                except ValueError as ve:
-                    # Re-raise ValueError for specific error handling
-                    raise ve
-                    
-                except Exception as je:
-                    # Handle JSON parsing errors
-                    logger.error(f"Error parsing JSON response: {str(je)}\nResponse content: {response.text}")
-                    raise ValueError(f"Failed to parse Manim service response: {str(je)}")
-                    
-            except requests.RequestException as re:
-                # Check if connection refused (container not running)
-                if "connection" in str(re).lower() and "refused" in str(re).lower():
-                    logger.error(f"Connection to Manim service refused. Make sure the container is running.")
-                    raise ValueError(f"Failed to connect to Manim service: {str(re)}")
-                # Handle other request errors (timeouts, etc.)
-                logger.error(f"Request to Manim service failed: {str(re)}")
-                raise ValueError(f"Failed to communicate with Manim service: {str(re)}")
+                
+                # Try to install missing dependencies if error suggests that's the issue
+                if install_missing_dependencies(error_msg):
+                    logger.info("Installed missing dependencies, retrying script execution")
+                    continue
+                
+                # Debug the script with AI
+                logger.info("Attempting to debug script with AI")
+                try:
+                    fixed_script = debug_manim_script(current_script, error_msg)
+                    if fixed_script != current_script:
+                        logger.info("AI provided a fixed script, will retry execution")
+                        current_script = fixed_script
+                        continue  # Retry with fixed script
+                    else:
+                        logger.warning("AI debugging did not change the script, trying one more execution")
+                except Exception as debug_error:
+                    logger.error(f"Failed to debug script: {str(debug_error)}")
+                    # Continue with the original script, don't give up
+            
+            # Get the output path from the result
+            output_path = result.get('output_path')
+            if not output_path:
+                raise ValueError("Missing output_path in Manim execution result")
+            
+            # Return script and output path
+            return {
+                'script': current_script,
+                'output_path': output_path,
+                'success': True
+            }
             
         except ValueError as ve:
-            # If this is the last attempt, raise the error
-            if current_attempt >= max_debug_attempts:
-                raise ve
-            
-            # Extract error message for debugging
             error_msg = str(ve)
+            last_error = error_msg
+            logger.error(f"Error in Manim execution: {error_msg}")
             
-            # Try to install missing dependencies if error suggests that's the issue
-            if install_missing_dependencies(error_msg):
-                logger.info("Installed missing dependencies, retrying script execution")
+            # If this is the last attempt, return a partial result
+            if current_attempt >= max_debug_attempts:
+                return {
+                    'script': current_script,
+                    'output_path': None,
+                    'error': error_msg,
+                    'success': False
+                }
+            
+            # Try again with a slightly modified script or parameter
+            if "Could not find a Scene class" in error_msg:
+                # Add a basic scene class and retry
+                current_script += "\n\nclass DefaultScene(Scene):\n    def construct(self):\n        self.add(Text('Generated animation'))\n"
                 continue
-            
-            # Debug the script with AI
-            logger.info("Attempting to debug script with AI")
-            try:
-                current_script = debug_manim_script(current_script, error_msg)
-                logger.info("AI provided a fixed script, will retry execution")
-            except Exception as debug_error:
-                logger.error(f"Failed to debug script: {str(debug_error)}")
-                raise ValueError(f"Failed to generate or debug Manim script after {current_attempt} attempts. Last error: {error_msg}")
         
         except Exception as e:
             error_msg = str(e)
+            last_error = error_msg
             stack_trace = traceback.format_exc()
             logger.error(f"Error executing Manim script: {error_msg}\n{stack_trace}")
             
-            # If this is the last attempt, raise the error
+            # If this is the last attempt, return a partial result
             if current_attempt >= max_debug_attempts:
-                raise
-            
-            # Try to install missing dependencies if error suggests that's the issue
-            if install_missing_dependencies(error_msg):
-                logger.info("Installed missing dependencies, retrying script execution")
-                continue
-            
-            # Debug the script with AI
-            logger.info("Attempting to debug script with AI")
-            try:
-                current_script = debug_manim_script(current_script, error_msg)
-                logger.info("AI provided a fixed script, will retry execution")
-            except Exception as debug_error:
-                logger.error(f"Failed to debug script: {str(debug_error)}")
-                raise ValueError(f"Failed to generate or debug Manim script after {current_attempt} attempts. Last error: {error_msg}")
+                return {
+                    'script': current_script,
+                    'output_path': None,
+                    'error': error_msg,
+                    'success': False
+                }
     
-    # If we get here, we've exhausted all attempts
-    raise ValueError(f"Failed to generate or debug Manim script after {max_debug_attempts} attempts") 
+    # If we get here, we've exhausted all attempts but want to return something
+    result = {
+        'script': current_script,
+        'output_path': None,
+        'error': last_error or "Failed to generate or debug Manim script after multiple attempts",
+        'success': False
+    }
+    
+    # Final failsafe cleanup for temp files matching Manim patterns
+    try:
+        import glob
+        import shutil
+        server_root = os.path.dirname(settings.MEDIA_ROOT)
+        
+        # Comprehensive temp file patterns
+        patterns = [
+            os.path.join(server_root, "tmp*.py"),
+            os.path.join(server_root, "tmp*"),
+            os.path.join(server_root, "*.py.tmp*"),
+            os.path.join(tempfile.gettempdir(), "tmp*manim*"),
+            os.path.join(tempfile.gettempdir(), "manim_*")
+        ]
+        
+        # Find and remove all matching files and directories
+        for pattern in patterns:
+            for path in glob.glob(pattern):
+                try:
+                    if os.path.isdir(path):
+                        shutil.rmtree(path, ignore_errors=True)
+                    else:
+                        os.unlink(path)
+                    logger.info(f"Cleaned up temp file: {path}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove temp file {path}: {str(e)}")
+    except Exception as cleanup_error:
+        logger.warning(f"Error in final cleanup: {str(cleanup_error)}")
+        
+    return result

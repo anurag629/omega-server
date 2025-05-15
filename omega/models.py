@@ -14,7 +14,6 @@ class ManimScript(models.Model):
         choices=[('gemini', 'Google Gemini'), ('azure_openai', 'Azure OpenAI')],
         help_text="AI provider used for generation"
     )
-    script_path = models.CharField(max_length=255, null=True, blank=True, help_text="Path to the saved script file")
     output_path = models.CharField(max_length=255, null=True, blank=True, help_text="Path to the output video")
     output_url = models.URLField(max_length=500, null=True, blank=True, help_text="Full URL to access the output video")
     status = models.CharField(

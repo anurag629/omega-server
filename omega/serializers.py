@@ -5,10 +5,10 @@ from .models import ManimScript
 class ManimScriptSerializer(serializers.ModelSerializer):
     class Meta:
         model = ManimScript
-        fields = ['id', 'prompt', 'script', 'provider', 'script_path', 
+        fields = ['id', 'prompt', 'script', 'provider', 
                   'output_path', 'output_url', 'status', 'error_message', 
                   'created_at', 'updated_at']
-        read_only_fields = ['id', 'script', 'script_path', 'output_path', 
+        read_only_fields = ['id', 'script', 'output_path', 
                            'output_url', 'status', 'error_message', 
                            'created_at', 'updated_at']
 

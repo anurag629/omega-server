@@ -9,9 +9,6 @@ services:
     volumes:
       - ./:/manim
       - ./media:/manim/media
-      - ./executor.py:/manim/executor.py
-    ports:
-      - "5001:5001"
     environment:
       - PYTHONUNBUFFERED=1
       - MANIM_VIDEO_DIR=/manim/media/videos
