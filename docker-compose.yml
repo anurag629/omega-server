@@ -1,90 +1,19 @@
 version: '3'
 
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: omega-postgres
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
-    environment:
-      - POSTGRES_USER=${DB_USER:-omega_user}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-omega_password}
-      - POSTGRES_DB=${DB_NAME:-omega_db}
-    ports:
-      - "5432:5432"
-    networks:
-      - omega-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-omega_user}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.django
-    container_name: omega-django
-    volumes:
-      - ./omega:/app/omega
-      - ./auth:/app/auth
-      - ./media:/app/media
-      - ./static:/app/static
-      - static_volume:/app/staticfiles
-    ports:
-      - "8000:8000"
-    environment:
-      - DJANGO_SETTINGS_MODULE=core.settings
-      - PYTHONUNBUFFERED=1
-      - DB_HOST=db
-      - DB_NAME=${DB_NAME:-omega_db}
-      - DB_USER=${DB_USER:-omega_user}
-      - DB_PASSWORD=${DB_PASSWORD:-omega_password}
-      - DB_PORT=${DB_PORT:-5432}
-      - SECRET_KEY=${SECRET_KEY}
-      - DEBUG=${DEBUG:-True}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
-      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
-      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}
-      - MANIM_SERVICE=omega-manim
-      - BASE_URL=${BASE_URL:-http://localhost:8000}
-    depends_on:
-      db:
-        condition: service_healthy
-      omega-manim:
-        condition: service_started
-    networks:
-      - omega-network
-    command: >
-      sh -c "python manage.py migrate &&
-             python manage.py collectstatic --noinput &&
-             gunicorn core.wsgi:application --bind 0.0.0.0:8000"
-
   omega-manim:
     build:
       context: .
-      dockerfile: Dockerfile.manim
+      dockerfile: Dockerfile
     container_name: omega-manim
+    volumes:
+      - ./:/manim
+      - ./media:/manim/media
+      - ./executor.py:/manim/executor.py
     ports:
       - "5001:5001"
-    volumes:
-      - ./omega:/manim/omega
-      - ./media:/manim/media
     environment:
       - PYTHONUNBUFFERED=1
-      - FLASK_APP=/manim/executor.py
-      - FLASK_RUN_PORT=5001
-      - FLASK_RUN_HOST=0.0.0.0
-    networks:
-      - omega-network
-    command: ["python", "-m", "flask", "run"]
-
-networks:
-  omega-network:
-    driver: bridge
-
-volumes:
-  postgres_data:
-  static_volume: 
+      - MANIM_VIDEO_DIR=/manim/media/videos
+      - MANIM_IMAGE_DIR=/manim/media/images
+    restart: unless-stopped 

@@ -132,23 +132,35 @@ def debug_manim_script(script, error_message):
     try:
         if settings.AZURE_OPENAI_API_KEY and settings.AZURE_OPENAI_ENDPOINT:
             # Use Azure OpenAI for debugging
-            client = AzureOpenAI(
-                api_key=settings.AZURE_OPENAI_API_KEY,
-                api_version="2023-07-01-preview",
-                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT
-            )
+            # Make sure we don't pass any proxy settings which may cause issues with newer OpenAI client versions
+            # Save the current proxy settings
+            http_proxy = os.environ.pop('HTTP_PROXY', None)
+            https_proxy = os.environ.pop('HTTPS_PROXY', None)
             
-            response = client.chat.completions.create(
-                model=settings.AZURE_OPENAI_DEPLOYMENT,
-                messages=[
-                    {"role": "system", "content": "You are an expert Manim developer who can fix errors in animation scripts."},
-                    {"role": "user", "content": debug_prompt}
-                ],
-                temperature=0.3,  # Lower temperature for more precise fixes
-                max_tokens=4000
-            )
-            
-            fixed_script = response.choices[0].message.content
+            try:
+                client = AzureOpenAI(
+                    api_key=settings.AZURE_OPENAI_API_KEY,
+                    api_version="2023-07-01-preview",
+                    azure_endpoint=settings.AZURE_OPENAI_ENDPOINT
+                )
+                
+                response = client.chat.completions.create(
+                    model=settings.AZURE_OPENAI_DEPLOYMENT,
+                    messages=[
+                        {"role": "system", "content": "You are an expert Manim developer who can fix errors in animation scripts."},
+                        {"role": "user", "content": debug_prompt}
+                    ],
+                    temperature=0.3,  # Lower temperature for more precise fixes
+                    max_tokens=4000
+                )
+                
+                fixed_script = response.choices[0].message.content
+            finally:
+                # Restore proxy settings
+                if http_proxy:
+                    os.environ['HTTP_PROXY'] = http_proxy
+                if https_proxy:
+                    os.environ['HTTPS_PROXY'] = https_proxy
         elif settings.GEMINI_API_KEY:
             # Fallback to Gemini if Azure OpenAI is not configured
             genai.configure(api_key=settings.GEMINI_API_KEY)
@@ -205,27 +217,14 @@ def install_missing_dependencies(error_message):
     return False
 
 
-def execute_manim_script(script):
+def execute_manim_script(script, script_id=None):
     """
     Executes the generated Manim script in the Manim container
     with automatic error handling and debugging
     """
-    # Generate a unique ID for this script
-    script_id = str(uuid.uuid4())
-    script_filename = f"manim_script_{script_id}.py"
-    
-    # Base directory for the Django project
-    base_dir = settings.BASE_DIR
-    
-    # Save path relative to the app
-    script_dir = os.path.join(base_dir, "omega", "scripts")
-    os.makedirs(script_dir, exist_ok=True)
-    
-    # Full path to save script
-    full_script_path = os.path.join(script_dir, script_filename)
-    
-    # Path as seen from manim container
-    container_script_path = f"/manim/omega/scripts/{script_filename}"
+    # If no script_id is provided, generate a unique ID
+    if script_id is None:
+        script_id = str(uuid.uuid4())
     
     # Maximum number of debug attempts
     max_debug_attempts = 3
@@ -235,11 +234,7 @@ def execute_manim_script(script):
     while current_attempt < max_debug_attempts:
         current_attempt += 1
         
-        # Save the current version of the script
-        with open(full_script_path, "w", encoding='utf-8') as f:
-            f.write(current_script)
-        
-        logger.info(f"Script saved to {full_script_path} (attempt {current_attempt})")
+        logger.info(f"Executing script with ID {script_id} (attempt {current_attempt})")
         
         try:
             # Get the scene class name from the script
@@ -262,8 +257,9 @@ def execute_manim_script(script):
                 response = requests.post(
                     manim_url,
                     json={
-                        'script_path': container_script_path,
-                        'scene_class': scene_class
+                        'script_content': current_script,
+                        'scene_class': scene_class,
+                        'script_id': str(script_id)
                     },
                     timeout=300  # Increased timeout for complex animations
                 )
@@ -302,9 +298,9 @@ def execute_manim_script(script):
                     if not output_path:
                         raise ValueError("Missing output_path in Manim response")
                     
-                    # Return script path and output path
+                    # Return script and output path
                     result = {
-                        'script_path': f"/omega/scripts/{script_filename}",
+                        'script': current_script,
                         'output_path': output_path
                     }
                     logger.info(f"Manim execution successful. Result: {result}")

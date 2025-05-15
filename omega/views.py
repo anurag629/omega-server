@@ -9,23 +9,18 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 import traceback
-
+from datetime import datetime
 from .models import ManimScript
 from .serializers import ManimScriptSerializer, ManimScriptGenerateSerializer
 from .services import generate_manim_script, execute_manim_script
-# Temporarily comment out this import until auth is properly set up
-# from auth.permissions import IsApprovedAndVerifiedUser
 
 logger = logging.getLogger(__name__)
 
 
 class HomeView(TemplateView):
-    template_name = 'omega/home.html'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = 'Omega - Manim Animation Generator'
-        return context
+    # Only show page that service is up and running without any template 
+    def get(self, request, *args, **kwargs):
+        return HttpResponse("Omega service is up and running. Current time: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 
 class ManimScriptViewSet(viewsets.ReadOnlyModelViewSet):

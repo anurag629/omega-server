@@ -72,3 +72,5 @@ htmlcov/
 
 # Backup files
 *.bak 
+
+./omega/scripts/
