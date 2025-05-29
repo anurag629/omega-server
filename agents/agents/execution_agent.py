@@ -34,7 +34,7 @@ class ManimExecutionAgent(BaseAgent):
         # Output media directory
         self.media_root = settings.MEDIA_ROOT
     
-    def execute(self, script, max_attempts=3):
+    def execute(self, script, max_attempts=100):
         """
         Execute a Manim script
         
@@ -43,7 +43,7 @@ class ManimExecutionAgent(BaseAgent):
                 - Script model object
                 - String with script content
                 - Dict with script content and other properties
-            max_attempts (int, optional): Maximum number of execution attempts. Defaults to 3.
+            max_attempts (int, optional): Maximum number of execution attempts. Defaults to 100.
             
         Returns:
             dict: Result with execution status, output path, and details
@@ -102,15 +102,21 @@ class ManimExecutionAgent(BaseAgent):
                     self.log_info(f"Installed missing dependencies, retrying execution")
                     continue
                 
-                # Try debugging the script with AI
+                # Always try debugging the script with AI when there's an error
                 if attempt < max_attempts:
+                    self.log_info(f"Sending script to AI debugger (attempt {attempt})")
                     debug_result = self.debug_agent.debug(current_script, last_error, execution=execution_obj)
+                    
+                    # Always use the returned script, even if it's unchanged
+                    current_script = debug_result["fixed_script"]
+                    
                     if debug_result["changed"]:
                         self.log_info(f"AI provided a fixed script, retrying execution")
-                        current_script = debug_result["fixed_script"]
-                        continue
                     else:
-                        self.log_warning(f"AI debugging did not change the script")
+                        self.log_warning(f"AI debugging did not change the script but will retry anyway")
+                    
+                    # Continue to retry with the current script (fixed or unchanged)
+                    continue
                 
             except Exception as e:
                 error_msg = str(e)
@@ -118,8 +124,11 @@ class ManimExecutionAgent(BaseAgent):
                 self.log_error(f"Error in execution process: {error_msg}\n{stack_trace}")
                 last_error = error_msg
                 
-                # Try one more time if this is not the last attempt
+                # Try debugging with AI if this is not the last attempt
                 if attempt < max_attempts:
+                    self.log_info(f"Sending script to AI debugger after exception (attempt {attempt})")
+                    debug_result = self.debug_agent.debug(current_script, error_msg, execution=execution_obj)
+                    current_script = debug_result["fixed_script"]
                     continue
         
         # All attempts failed, update records

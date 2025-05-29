@@ -1,4 +1,3 @@
-import logging
 from django.conf import settings
 from django.shortcuts import render
 from django.http import HttpResponse, FileResponse
@@ -15,8 +14,6 @@ from .serializers import ManimScriptSerializer, ManimScriptGenerateSerializer
 # Import agents instead of services
 from agents.agents.ai_agent import AIScriptGenerationAgent
 from agents.agents.execution_agent import ManimExecutionAgent
-
-logger = logging.getLogger(__name__)
 
 
 class HomeView(TemplateView):
@@ -122,7 +119,6 @@ class GenerateManimScriptAPIView(APIView):
                 except Exception as e:
                     error_msg = str(e)
                     stack_trace = traceback.format_exc()
-                    logger.error(f"Error executing script: {error_msg}\n{stack_trace}")
                     
                     manim_script.status = 'failed'
                     manim_script.error_message = error_msg
@@ -130,15 +126,11 @@ class GenerateManimScriptAPIView(APIView):
                     
                     response_data['error'] = error_msg
             
-            # Log the response data for debugging
-            logger.info(f"API Response data: {response_data}")
-            
             return Response(response_data)
             
         except Exception as e:
             error_msg = str(e)
             stack_trace = traceback.format_exc()
-            logger.error(f"Error in generate_manim API: {error_msg}\n{stack_trace}")
             return Response({
                 'error': error_msg
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -156,11 +148,9 @@ def serve_media(request, path):
     file_path = os.path.join(media_root, path)
     
     if not os.path.exists(file_path):
-        logger.error(f"Media file not found: {file_path}")
         raise Http404(f"File not found: {path}")
     
     try:
         return FileResponse(open(file_path, 'rb'))
     except Exception as e:
-        logger.error(f"Error serving file {file_path}: {str(e)}")
         raise Http404(f"Error accessing file: {path}") 

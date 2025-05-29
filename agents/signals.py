@@ -2,9 +2,6 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .models import Script, Execution
 from .agents.execution_agent import ManimExecutionAgent
-import logging
-
-logger = logging.getLogger(__name__)
 
 @receiver(post_save, sender=Script)
 def execute_new_script(sender, instance, created, **kwargs):
@@ -13,8 +10,6 @@ def execute_new_script(sender, instance, created, **kwargs):
     """
     # Check if this is a new script with auto_execute flag
     if created and getattr(instance, 'auto_execute', False):
-        logger.info(f"Auto-executing new script: {instance.id}")
-        
         # Create execution agent
         execution_agent = ManimExecutionAgent()
         
@@ -24,7 +19,7 @@ def execute_new_script(sender, instance, created, **kwargs):
         execution_thread = threading.Thread(
             target=execution_agent.execute,
             args=(instance,),
-            kwargs={'max_attempts': 3}
+            kwargs={'max_attempts': 100}
         )
         execution_thread.daemon = True
         execution_thread.start()
@@ -40,8 +35,7 @@ def notify_execution_complete(sender, instance, created, **kwargs):
         
     # Check if this is a completed execution (has completed_at set)
     if instance.completed_at and instance.script:
-        logger.info(f"Execution {instance.id} completed with status: {'Success' if instance.is_successful else 'Failed'}")
-        
+        pass
         # Here you could add code to:
         # 1. Send notifications (email, websocket, etc.)
         # 2. Update related models

@@ -66,15 +66,13 @@ class AIScriptGenerationAgent(BaseAgent):
             else:
                 raise ValueError(f"Unsupported provider type: {provider_type}")
             
-            # Clean up the script
-            cleaned_script = self._clean_script(script)
             
             # Create Script record in database if within Django context
-            script_obj = self._create_script_record(prompt, cleaned_script, provider_obj)
+            script_obj = self._create_script_record(prompt, script, provider_obj)
             
             return {
                 "success": True,
-                "script": cleaned_script,
+                "script": script,
                 "provider": provider_obj,
                 "script_obj": script_obj
             }
@@ -163,40 +161,6 @@ class AIScriptGenerationAgent(BaseAgent):
         
         return response.choices[0].message.content
     
-    def _clean_script(self, script):
-        """
-        Clean up AI-generated script to ensure it's valid Python
-        
-        Args:
-            script (str): The raw script from the AI
-            
-        Returns:
-            str: Cleaned script
-        """
-        # Remove markdown code blocks
-        cleaned = script.replace('```python', '').replace('```', '')
-        
-        # Remove leading/trailing whitespace
-        cleaned = cleaned.strip()
-        
-        # Check if the script starts with proper imports
-        if not cleaned.startswith('from manim import') and not cleaned.startswith('import manim'):
-            # Add a basic import if needed
-            cleaned = 'from manim import *\n\n' + cleaned
-        
-        # Ensure the script has correct Scene class
-        has_scene_class = False
-        for line in cleaned.split('\n'):
-            if 'class' in line and 'Scene' in line:
-                has_scene_class = True
-                break
-        
-        if not has_scene_class:
-            # Add a basic Scene class skeleton
-            self.log_warning("No scene class found in generated script, adding a basic one")
-            cleaned += "\n\nclass DefaultScene(Scene):\n    def construct(self):\n        self.add(Text('Generated animation'))\n"
-        
-        return cleaned
     
     def _get_provider(self, provider=None):
         """
