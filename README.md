@@ -2,6 +2,8 @@
 
 Omega Server is a Django-based backend for AI-powered Manim script generation and execution. It provides a secure, extensible API for generating, executing, and managing Manim animation scripts using advanced AI models (Google Gemini, Azure OpenAI) and Dockerized execution environments.
 
+# Frontend is at: https://github.com/anurag629/omega-client
+
 ## Features
 
 - **AI-Powered Script Generation**: Generate Manim scripts from natural language prompts using Gemini or Azure OpenAI.
