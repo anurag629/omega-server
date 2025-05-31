@@ -74,6 +74,35 @@ See [docs/API.md](docs/API.md) for detailed endpoint documentation.
 - Add new AI providers by extending `AIScriptGenerationAgent`.
 - Add new endpoints or business logic via DRF viewsets and serializers.
 
+## Visualizations
+
+The project includes various mathematical and educational animations generated using Manim. These visualizations are stored in `docs/media/videos/` and include:
+
+### Linear Regression Demonstration
+![Circle Area Diameter Relation](docs/media/videos/CircleAreaDiameterRelation.mp4)
+- A visual explanation of linear regression concepts
+- Shows data points, best fit line, and error calculations
+- Demonstrates gradient descent optimization
+
+### Mathematical Concepts
+![Circle Area Diameter](docs/media/videos/CircleAreaDiameter.mp4)
+- Visualization of complex mathematical operations
+- Step-by-step animation of problem-solving techniques
+- Interactive mathematical proofs
+
+### Educational Sequences
+![Circle To Point](docs/media/videos/CircleToPoint.mp4)
+- Clear, step-by-step explanations of concepts
+- Visual aids for better understanding
+- Interactive learning elements
+
+![Linear Regression](docs/media/videos/LinearRegressionScene.mp4)
+- A visual explanation of linear regression concepts
+- Shows data points, best fit line, and error calculations
+- Demonstrates gradient descent optimization
+
+Each visualization is generated through our AI-powered script generation system and executed in a secure Docker environment. The outputs are high-quality MP4 files at 720p resolution.
+
 ## License
 MIT
 
