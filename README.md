@@ -78,44 +78,23 @@ See [docs/API.md](docs/API.md) for detailed endpoint documentation.
 
 The project includes various mathematical and educational animations generated using Manim. These visualizations are stored in `docs/media/videos/` and include:
 
-### Linear Regression Demonstration
-<video width="500" controls>
-  <source src="docs/media/videos/CircleAreaDiameterRelation.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
-
-- A visual explanation of linear regression concepts  
+### Linear Regression Demonstration  
+[![Circle Area Diameter Relation](http://img.youtube.com/vi/92PgdUDL7Lw/0.jpg)](https://youtu.be/92PgdUDL7Lw)  
+*A visual explanation of linear regression concepts*  
 - Shows data points, best fit line, and error calculations  
 - Demonstrates gradient descent optimization  
 
-### Mathematical Concepts
-<video width="500" controls>
-  <source src="docs/media/videos/CircleAreaDiameter.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
-
-- Visualization of complex mathematical operations  
+### Mathematical Concepts  
+[![Circle Area Diameter](http://img.youtube.com/vi/2rw7FwE-ppE/0.jpg)](https://youtu.be/2rw7FwE-ppE)  
+*Visualization of complex mathematical operations*  
 - Step-by-step animation of problem-solving techniques  
 - Interactive mathematical proofs  
 
-### Educational Sequences
-<video width="500" controls>
-  <source src="docs/media/videos/CircleToPoint.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
-
-- Clear, step-by-step explanations of concepts  
+### Educational Sequences  
+[![Circle To Point](http://img.youtube.com/vi/Z_uXTv-gRTM/0.jpg)](https://youtu.be/Z_uXTv-gRTM)  
+*Clear, step-by-step explanations of concepts*  
 - Visual aids for better understanding  
 - Interactive learning elements  
-
-<video width="500" controls>
-  <source src="docs/media/videos/LinearRegressionScene.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
-
-- A visual explanation of linear regression concepts  
-- Shows data points, best fit line, and error calculations  
-- Demonstrates gradient descent optimization  
 
 
 Each visualization is generated through our AI-powered script generation system and executed in a secure Docker environment. The outputs are high-quality MP4 files at 720p resolution.
